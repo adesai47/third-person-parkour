@@ -1,34 +1,189 @@
 // src/components/Player.tsx
+import { forwardRef, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useRef, useEffect, useState, forwardRef } from 'react';
 import * as THREE from 'three';
 
-interface PlatformData {
+interface Platform {
   position: [number, number, number];
   size: [number, number, number];
+  type?: 'moving';
+  movement?: {
+    axis: 'x' | 'y' | 'z';
+    range: number;
+    speed: number;
+  };
 }
 
 interface PlayerProps {
-  platforms: PlatformData[];
+  platforms: Platform[];
   onFall: () => void;
+  onLevelComplete?: () => void;
+  isRestarting?: boolean;
 }
 
-const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall }, ref) => {
-  const innerRef = useRef<THREE.Mesh>(null!);
-  const playerRef = (ref as any) || innerRef; // Combine refs if ref is provided
+const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevelComplete, isRestarting }, ref) => {
+  const velocity = useRef(new THREE.Vector3());
+  const isJumping = useRef(false);
+  const jumpCount = useRef(0);
+  const pressedKeys = useRef<{ [key: string]: boolean }>({});
+  const currentPlatform = useRef<Platform | null>(null);
+  const lastPlatformOffset = useRef(new THREE.Vector3());
 
-  const [velocity, setVelocity] = useState(new THREE.Vector3());
-  const [jumpCount, setJumpCount] = useState(0);  // Track jumps
-  const [pressedKeys, setPressedKeys] = useState<{ [key: string]: boolean }>({});
+  // Function to get actual platform position (including movement)
+  const getPlatformPosition = (platform: Platform, time: number) => {
+    if (platform.type === 'moving' && platform.movement) {
+      const pos = [...platform.position];
+      const axisIndex = platform.movement.axis === 'x' ? 0 : platform.movement.axis === 'y' ? 1 : 2;
+      pos[axisIndex] += Math.sin(time * platform.movement.speed) * platform.movement.range;
+      return pos as [number, number, number];
+    }
+    return platform.position;
+  };
 
-  // Handle key presses
+  // Get platform movement delta
+  const getPlatformDelta = (platform: Platform, time: number, lastTime: number) => {
+    if (platform.type === 'moving' && platform.movement) {
+      const currentPos = Math.sin(time * platform.movement.speed) * platform.movement.range;
+      const lastPos = Math.sin(lastTime * platform.movement.speed) * platform.movement.range;
+      const delta = currentPos - lastPos;
+      
+      const deltaVector = new THREE.Vector3();
+      if (platform.movement.axis === 'x') deltaVector.x = delta;
+      if (platform.movement.axis === 'y') deltaVector.y = delta;
+      if (platform.movement.axis === 'z') deltaVector.z = delta;
+      
+      return deltaVector;
+    }
+    return new THREE.Vector3();
+  };
+
+  // Check collision with platform
+  const checkPlatformCollision = (playerPosition: THREE.Vector3, time: number) => {
+    for (const platform of platforms) {
+      const platformPos = getPlatformPosition(platform, time);
+      const size = platform.size;
+
+      // Check if player is within platform bounds
+      if (
+        playerPosition.x >= platformPos[0] - size[0] / 2 &&
+        playerPosition.x <= platformPos[0] + size[0] / 2 &&
+        playerPosition.z >= platformPos[2] - size[2] / 2 &&
+        playerPosition.z <= platformPos[2] + size[2] / 2
+      ) {
+        // Check vertical collision
+        const platformTop = platformPos[1] + size[1] / 2;
+        const playerBottom = playerPosition.y - 0.5;
+
+        if (playerBottom <= platformTop && playerBottom > platformTop - 0.5) {
+          // Snap player to platform top
+          playerPosition.y = platformTop + 0.5;
+          velocity.current.y = 0;
+          isJumping.current = false;
+          
+          // Store current platform reference
+          if (currentPlatform.current !== platform) {
+            currentPlatform.current = platform;
+            lastPlatformOffset.current.set(0, 0, 0);
+          }
+          return true;
+        }
+      }
+    }
+    currentPlatform.current = null;
+    return false;
+  };
+
+  let lastTime = 0;
+  useFrame((state) => {
+    if (!ref || !('current' in ref) || !ref.current) return;
+
+    const playerMesh = ref.current;
+    const newPosition = playerMesh.position.clone();
+    const moveSpeed = 0.15;
+
+    // Apply platform movement if standing on a moving platform
+    if (currentPlatform.current && currentPlatform.current.type === 'moving') {
+      const platformDelta = getPlatformDelta(
+        currentPlatform.current,
+        state.clock.elapsedTime,
+        lastTime
+      );
+      newPosition.add(platformDelta);
+    }
+
+    // Horizontal movement with reduced speed
+    if (pressedKeys.current['KeyA'] || pressedKeys.current['ArrowLeft']) {
+      newPosition.x -= moveSpeed;
+    }
+    if (pressedKeys.current['KeyD'] || pressedKeys.current['ArrowRight']) {
+      newPosition.x += moveSpeed;
+    }
+    if (pressedKeys.current['KeyW'] || pressedKeys.current['ArrowUp']) {
+      newPosition.z -= moveSpeed;
+    }
+    if (pressedKeys.current['KeyS'] || pressedKeys.current['ArrowDown']) {
+      newPosition.z += moveSpeed;
+    }
+
+    // Jump logic with double jump
+    if (pressedKeys.current['Space']) {
+      if (!isJumping.current) {
+        velocity.current.y = 0.3;
+        isJumping.current = true;
+        jumpCount.current = 1;
+        currentPlatform.current = null;
+      } else if (jumpCount.current === 1) {
+        // Double jump
+        velocity.current.y = 0.3;
+        jumpCount.current = 2;
+      }
+      // Clear the space key press to prevent holding
+      pressedKeys.current['Space'] = false;
+    }
+
+    // Apply gravity
+    velocity.current.y -= 0.015;
+    newPosition.y += velocity.current.y;
+
+    // Check platform collision with new position
+    const onPlatform = checkPlatformCollision(newPosition, state.clock.elapsedTime);
+    if (onPlatform) {
+      jumpCount.current = 0; // Reset jump count when landing
+    }
+
+    // Fall detection
+    if (newPosition.y < -10) {
+      onFall();
+      return;
+    }
+
+    // Update position
+    playerMesh.position.copy(newPosition);
+
+    // Check for level completion
+    const lastPlatform = platforms[platforms.length - 1];
+    const portalPosition = [
+      lastPlatform.position[0],
+      lastPlatform.position[1] + 3,
+      lastPlatform.position[2]
+    ];
+    
+    const distanceToPortal = newPosition.distanceTo(new THREE.Vector3(...portalPosition));
+    if (distanceToPortal < 2) {
+      onLevelComplete?.();
+    }
+
+    lastTime = state.clock.elapsedTime;
+  });
+
+  // Key event handlers
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      setPressedKeys((keys) => ({ ...keys, [event.code]: true }));
+      pressedKeys.current[event.code] = true;
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      setPressedKeys((keys) => ({ ...keys, [event.code]: false }));
+      pressedKeys.current[event.code] = false;
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -40,69 +195,27 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall }, ref) 
     };
   }, []);
 
-  // Platform collision check
-  const checkPlatformCollision = () => {
-    for (const platform of platforms) {
-      const [px, py, pz] = platform.position;
-      const [width, height, depth] = platform.size;
-
-      const playerHeight = 1; // Assume player height is 1 for simplicity
-
-      const isWithinX = playerRef.current.position.x >= px - width / 2 && playerRef.current.position.x <= px + width / 2;
-      const isWithinZ = playerRef.current.position.z >= pz - depth / 2 && playerRef.current.position.z <= pz + depth / 2;
-      const isLandingHeight = playerRef.current.position.y <= py + height / 2 + playerHeight / 2;
-
-      if (isWithinX && isWithinZ && isLandingHeight) {
-        // Land the player on top of the platform
-        playerRef.current.position.y = py + height / 2 + playerHeight / 2;
-        setVelocity((v) => new THREE.Vector3(v.x, 0, v.z)); // Stop vertical velocity
-        setJumpCount(0); // Reset jump count
-        return true;
-      }
+  // Add effect to handle restart
+  useEffect(() => {
+    if (isRestarting && ref && 'current' in ref && ref.current) {
+      // Reset position
+      ref.current.position.set(0, 1, 0);
+      // Reset velocity
+      velocity.current.set(0, 0, 0);
+      // Reset jumping state
+      isJumping.current = false;
+      // Reset platform reference
+      currentPlatform.current = null;
+      lastPlatformOffset.current.set(0, 0, 0);
+      // Reset jump count
+      jumpCount.current = 0;
     }
-    return false;
-  };
-
-  useFrame(() => {
-    if (playerRef.current) {
-      let newVelocity = velocity.clone();
-
-      // Apply horizontal movement based on key presses
-      if (pressedKeys['KeyW']) newVelocity.z = -0.1; // Move forward
-      else if (pressedKeys['KeyS']) newVelocity.z = 0.1; // Move backward
-      else newVelocity.z = 0; // Stop forward/backward movement
-
-      if (pressedKeys['KeyA']) newVelocity.x = -0.1; // Move left
-      else if (pressedKeys['KeyD']) newVelocity.x = 0.1; // Move right
-      else newVelocity.x = 0; // Stop left/right movement
-
-      // Handle jumping with double jump
-      if (pressedKeys['Space'] && jumpCount < 2 && velocity.y <= 0.01) {
-        newVelocity.y = 0.2; // Jump velocity
-        setJumpCount((count) => count + 1);
-      }
-
-      // Apply gravity continuously
-      newVelocity.y -= 0.01; // Gravity effect
-
-      // Update position based on velocity
-      playerRef.current.position.add(newVelocity);
-      setVelocity(newVelocity);
-
-      // Check if player has landed on a platform
-      if (!checkPlatformCollision()) {
-        // If no platform is below and player has fallen below threshold, trigger onFall
-        if (playerRef.current.position.y < -10) {
-          onFall();
-        }
-      }
-    }
-  });
+  }, [isRestarting]);
 
   return (
-    <mesh ref={playerRef} position={[0, 1, 0]}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#3498db" />
+    <mesh ref={ref} position={[0, 1, 0]}>
+      <sphereGeometry args={[0.5, 32, 32]} />
+      <meshStandardMaterial color="hotpink" />
     </mesh>
   );
 });
