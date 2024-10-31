@@ -6,13 +6,17 @@ import * as THREE from 'three';
 interface Platform {
   position: [number, number, number];
   size: [number, number, number];
+  color: string;
+  isSafe?: boolean;
   type?: 'moving';
   movement?: {
     axis: 'x' | 'y' | 'z';
     range: number;
     speed: number;
   };
-  color?: string;
+  isStart?: boolean;
+  isEnd?: boolean;
+  toggleInterval?: number;
 }
 
 interface PlayerProps {
@@ -21,9 +25,10 @@ interface PlayerProps {
   onLevelComplete?: () => void;
   isRestarting?: boolean;
   currentLevel: number;
+  platformStates: { [key: string]: boolean };
 }
 
-const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevelComplete, isRestarting, currentLevel }, ref) => {
+const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevelComplete, isRestarting, currentLevel, platformStates }, ref) => {
   const velocity = useRef(new THREE.Vector3());
   const isJumping = useRef(false);
   const jumpCount = useRef(0);
@@ -32,7 +37,31 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
   const currentPlatform = useRef<Platform | null>(null);
   const lastTime = useRef(0);
 
-  // Get platform current position
+  // Updated getStartingPlatformPosition function
+  const getStartingPlatformPosition = () => {
+    const startingPlatform = platforms.find(platform => platform.isStart || platform.position[1] === -1);
+    if (startingPlatform) {
+      // Return position above the platform (y + 2 to ensure we're well above it)
+      return [
+        startingPlatform.position[0],
+        startingPlatform.position[1] + 2,
+        startingPlatform.position[2]
+      ] as [number, number, number];
+    }
+    return [0, 2, 0]; // Higher default position
+  };
+
+  // Ensure proper initial position
+  useEffect(() => {
+    if (ref && 'current' in ref && ref.current) {
+      const startPos = getStartingPlatformPosition();
+      ref.current.position.set(...startPos);
+      velocity.current.set(0, 0, 0); // Reset velocity
+      hasFallen.current = false; // Reset fall state
+    }
+  }, [currentLevel]);
+
+  // Handle platform movement if applicable
   const getPlatformCurrentPosition = (platform: Platform, time: number) => {
     if (platform.type === 'moving' && platform.movement) {
       const pos = [...platform.position];
@@ -44,74 +73,86 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
     return platform.position;
   };
 
-  // Get platform movement delta
-  const getPlatformDelta = (platform: Platform, currentTime: number) => {
-    if (platform.type === 'moving' && platform.movement) {
-      const currentOffset = Math.sin(currentTime * platform.movement.speed) * platform.movement.range;
-      const previousOffset = Math.sin(lastTime.current * platform.movement.speed) * platform.movement.range;
-      const delta = currentOffset - previousOffset;
-      
-      const movement = new THREE.Vector3();
-      if (platform.movement.axis === 'x') movement.x = delta;
-      if (platform.movement.axis === 'y') movement.y = delta;
-      if (platform.movement.axis === 'z') movement.z = delta;
-      
-      return movement;
-    }
-    return new THREE.Vector3();
-  };
-
-  // Check platform collision
+  // Updated checkPlatformCollision function
   const checkPlatformCollision = (playerPosition: THREE.Vector3, time: number) => {
-    currentPlatform.current = null;  // Reset current platform
+    currentPlatform.current = null;
 
-    for (const platform of platforms) {
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      const platformId = `platform-${i}`;
+
+      // Always check collision with starting platform
+      if (platform.isStart || i === 0) {
+        const platformPos = getPlatformCurrentPosition(platform, time);
+        const size = platform.size;
+
+        const minX = platformPos[0] - size[0] / 2;
+        const maxX = platformPos[0] + size[0] / 2;
+        const minZ = platformPos[2] - size[2] / 2;
+        const maxZ = platformPos[2] + size[2] / 2;
+        const platformTop = platformPos[1] + size[1] / 2;
+        const platformBottom = platformPos[1] - size[1] / 2;
+
+        // Improved collision detection
+        if (
+          playerPosition.x >= minX &&
+          playerPosition.x <= maxX &&
+          playerPosition.z >= minZ &&
+          playerPosition.z <= maxZ
+        ) {
+          const playerBottom = playerPosition.y - 0.5;
+          
+          // Landing on top of platform
+          if (playerBottom <= platformTop && playerBottom > platformTop - 0.5 && velocity.current.y <= 0) {
+            playerPosition.y = platformTop + 0.5;
+            velocity.current.y = 0;
+            currentPlatform.current = platform;
+            isJumping.current = false;
+            jumpCount.current = 0;
+            return true;
+          }
+        }
+      }
+
+      // Rest of platform collision checks for non-starting platforms
+      if (currentLevel === 4 && !platform.isStart && !platform.isEnd && !platformStates[platformId]) {
+        continue;
+      }
+
       const platformPos = getPlatformCurrentPosition(platform, time);
       const size = platform.size;
-      
+
+      // Basic AABB collision detection
       const minX = platformPos[0] - size[0] / 2;
       const maxX = platformPos[0] + size[0] / 2;
       const minZ = platformPos[2] - size[2] / 2;
       const maxZ = platformPos[2] + size[2] / 2;
       const platformTop = platformPos[1] + size[1] / 2;
-      const platformBottom = platformPos[1] - size[1] / 2;
 
       if (
         playerPosition.x >= minX &&
         playerPosition.x <= maxX &&
         playerPosition.z >= minZ &&
-        playerPosition.z <= maxZ
+        playerPosition.z <= maxZ &&
+        playerPosition.y - 0.5 <= platformTop &&
+        velocity.current.y <= 0
       ) {
-        const playerBottom = playerPosition.y - 0.5;
-        const playerTop = playerPosition.y + 0.5;
-
-        // Landing on top of platform
-        if (playerBottom <= platformTop && playerBottom > platformTop - 0.5 && velocity.current.y <= 0) {
-          playerPosition.y = platformTop + 0.5;
-          velocity.current.y = 0;
-          currentPlatform.current = platform;  // Set current platform
-          return true;
-        }
-
-        // Other collisions remain the same...
-        if (playerTop >= platformBottom && playerTop < platformBottom + 0.5 && velocity.current.y > 0) {
-          playerPosition.y = platformBottom - 0.5;
-          velocity.current.y = 0;
-          return true;
-        }
-
-        // Side collisions remain the same...
+        playerPosition.y = platformTop + 0.5;
+        velocity.current.y = 0;
+        currentPlatform.current = platform;
+        isJumping.current = false;
+        jumpCount.current = 0;
+        return true;
       }
     }
     return false;
   };
 
-  // Handle keyboard input
+  // Handle keyboard input for movement and jumping
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       pressedKeys.current[event.code] = true;
-      
-      // Handle jump
+
       if (event.code === 'Space' && jumpCount.current < 2) {
         velocity.current.y = 0.3;
         jumpCount.current += 1;
@@ -131,6 +172,23 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
+
+  // Add getPlatformDelta function to calculate platform movement
+  const getPlatformDelta = (platform: Platform, currentTime: number) => {
+    if (platform.type === 'moving' && platform.movement) {
+      const currentOffset = Math.sin(currentTime * platform.movement.speed) * platform.movement.range;
+      const previousOffset = Math.sin(lastTime.current * platform.movement.speed) * platform.movement.range;
+      const delta = currentOffset - previousOffset;
+      
+      const movement = new THREE.Vector3();
+      if (platform.movement.axis === 'x') movement.x = delta;
+      if (platform.movement.axis === 'y') movement.y = delta;
+      if (platform.movement.axis === 'z') movement.z = delta;
+      
+      return movement;
+    }
+    return new THREE.Vector3();
+  };
 
   useFrame((state) => {
     if (!ref || !('current' in ref) || !ref.current) return;
@@ -171,7 +229,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
       jumpCount.current = 0;
     }
 
-    // Update position
+    // Update player position
     playerMesh.position.copy(newPosition);
 
     // Update last time for platform movement calculations
@@ -193,16 +251,16 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
     ];
     
     const distanceToPortal = newPosition.distanceTo(new THREE.Vector3(...portalPosition));
-    if (distanceToPortal < 2 && (currentLevel === 1 || currentLevel === 2)) {
+    if (distanceToPortal < 2 && currentLevel < 4) {
       onLevelComplete?.();
     }
   });
 
-  // Reset function for restarting
+  // Reset player position on restart
   useEffect(() => {
     if (isRestarting) {
       if (ref && 'current' in ref && ref.current) {
-        ref.current.position.set(0, 1, 0);
+        ref.current.position.set(...getStartingPlatformPosition());
         velocity.current.set(0, 0, 0);
         isJumping.current = false;
         jumpCount.current = 0;
@@ -210,10 +268,10 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
         pressedKeys.current = {};
       }
     }
-  }, [isRestarting]);
+  }, [isRestarting, currentLevel, ref]);
 
   return (
-    <mesh ref={ref} position={[0, 1, 0]}>
+    <mesh ref={ref} position={getStartingPlatformPosition()}>
       <sphereGeometry args={[0.5, 32, 32]} />
       <meshStandardMaterial color="hotpink" />
     </mesh>

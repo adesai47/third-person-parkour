@@ -6,7 +6,8 @@ import CameraController from './CameraController';
 import Cloud from './Cloud'; // Import the Cloud component
 import Portal from './Portal';
 import MovingPlatform from './MovingPlatform';
-import { useRef, useState, useCallback } from 'react';
+import TogglingPlatform from './TogglingPlatform';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 
 // Define levels
@@ -114,6 +115,51 @@ const levels = {
     
     // Final platform (green)
     { position: [0, 11, -96], size: [5, 1, 5], color: "#00ff00" }
+  ],
+  4: [
+    // Starting platform (red)
+    { 
+      position: [0, -1, 0], 
+      size: [10, 1, 10], 
+      color: "#ff0000",
+      isStart: true
+    },
+    // Disappearing platforms (all green)
+    { 
+      position: [0, 0, -10], 
+      size: [3, 1, 3], 
+      color: "#00ff00",
+      toggleInterval: 2,
+      type: 'toggling'
+    },
+    { 
+      position: [3, 1, -20], 
+      size: [3, 1, 3], 
+      color: "#00ff00",
+      toggleInterval: 1.5,
+      type: 'toggling'
+    },
+    { 
+      position: [-3, 2, -30], 
+      size: [3, 1, 3], 
+      color: "#00ff00",
+      toggleInterval: 2.5,
+      type: 'toggling'
+    },
+    { 
+      position: [0, 3, -40], 
+      size: [3, 1, 3], 
+      color: "#00ff00",
+      toggleInterval: 1.8,
+      type: 'toggling'
+    },
+    // End platform (doesn't disappear)
+    { 
+      position: [0, 4, -50], 
+      size: [5, 1, 5], 
+      color: "#00ff00",
+      isEnd: true
+    }
   ]
 };
 
@@ -122,6 +168,7 @@ const GameScene = () => {
   const [isGameOver, setIsGameOver] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const playerRef = useRef<THREE.Mesh>(null);
+  const [platformStates, setPlatformStates] = useState<{ [key: string]: boolean }>({});
 
   const handleFall = useCallback(() => {
     if (!isGameOver) {
@@ -134,6 +181,8 @@ const GameScene = () => {
       setCurrentLevel(2);
     } else if (currentLevel === 2) {
       setCurrentLevel(3);
+    } else if (currentLevel === 3) {
+      setCurrentLevel(4);
     }
     
     // Reset player position for new level
@@ -142,7 +191,22 @@ const GameScene = () => {
     }
   }, [currentLevel]);
 
-  const restartGame = useCallback(() => {
+  // Restart current level
+  const restartCurrentLevel = useCallback(() => {
+    setIsRestarting(true);
+    setIsGameOver(false);
+    
+    if (playerRef.current) {
+      playerRef.current.position.set(0, 1, 0);
+    }
+    
+    setTimeout(() => {
+      setIsRestarting(false);
+    }, 100);
+  }, []);
+
+  // Restart from level 1
+  const restartFromBeginning = useCallback(() => {
     setIsRestarting(true);
     setIsGameOver(false);
     setCurrentLevel(1);
@@ -168,6 +232,43 @@ const GameScene = () => {
         <ambientLight intensity={0.3} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
 
+        {/* Render platforms for current level */}
+        {levels[currentLevel].map((platform, index) => {
+          if (platform.type === 'moving') {
+            return (
+              <MovingPlatform
+                key={index}
+                position={platform.position}
+                size={platform.size}
+                color={platform.color}
+                movement={platform.movement}
+              />
+            );
+          } else if (platform.type === 'toggling' || platform.toggleInterval) {
+            return (
+              <TogglingPlatform
+                key={index}
+                position={platform.position}
+                size={platform.size}
+                color={platform.color}
+                toggleInterval={platform.toggleInterval || 2}
+                platformId={`platform-${index}`}
+                setPlatformStates={setPlatformStates}
+              />
+            );
+          } else {
+            return (
+              <Platform
+                key={index}
+                position={platform.position}
+                size={platform.size}
+                color={platform.color}
+              />
+            );
+          }
+        })}
+
+
         <Player 
           ref={playerRef} 
           platforms={levels[currentLevel]} 
@@ -175,30 +276,11 @@ const GameScene = () => {
           onLevelComplete={handleLevelComplete}
           isRestarting={isRestarting}
           currentLevel={currentLevel}
+          platformStates={platformStates}
         />
 
-        {/* Render platforms for current level */}
-        {levels[currentLevel].map((platform, index) => (
-          platform.type === 'moving' ? (
-            <MovingPlatform
-              key={index}
-              position={platform.position}
-              size={platform.size}
-              color={platform.color}
-              movement={platform.movement}
-            />
-          ) : (
-            <Platform
-              key={index}
-              position={platform.position}
-              size={platform.size}
-              color={platform.color}
-            />
-          )
-        ))}
-
-        {/* Only show portal if not on final level */}
-        {currentLevel < 3 && (
+        {/* Only show portal for levels 1-3 */}
+        {currentLevel < 4 && (
           <Portal 
             position={[
               levels[currentLevel][levels[currentLevel].length - 1].position[0],
@@ -222,17 +304,29 @@ const GameScene = () => {
         Level {currentLevel}
       </div>
 
-      {/* Game over overlay */}
+      {/* Updated Game Over overlay */}
       {isGameOver && (
         <div style={styles.loseOverlayContainer}>
           <div style={styles.loseBox}>
             <h1 style={styles.loseText}>You Lose</h1>
-            <button 
-              style={styles.restartButton}
-              onClick={restartGame}
-            >
-              Restart
-            </button>
+            <div style={styles.buttonContainer}>
+              <button 
+                style={styles.restartButton}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2980b9'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3498db'}
+                onClick={restartCurrentLevel}
+              >
+                Restart Level {currentLevel}
+              </button>
+              <button 
+                style={styles.restartButtonRed}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#c0392b'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#e74c3c'}
+                onClick={restartFromBeginning}
+              >
+                Start from Level 1
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -270,6 +364,7 @@ const styles = {
     color: '#fff',
     margin: 0,
     textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+    marginBottom: '10px',
   },
   restartButton: {
     padding: '12px 30px',
@@ -281,6 +376,29 @@ const styles = {
     color: '#fff',
     transition: 'background-color 0.2s ease',
     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    width: '100%',
+    textAlign: 'center' as 'center',
+    fontWeight: '500',
+  },
+  restartButtonRed: {
+    padding: '12px 30px',
+    fontSize: '1.2rem',
+    backgroundColor: '#e74c3c',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#fff',
+    transition: 'background-color 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    width: '100%',
+    textAlign: 'center' as 'center',
+    fontWeight: '500',
+  },
+  buttonContainer: {
+    display: 'flex',
+    flexDirection: 'column' as 'column',
+    gap: '15px',
+    width: '100%',
   },
   levelIndicator: {
     position: 'absolute' as 'absolute',
