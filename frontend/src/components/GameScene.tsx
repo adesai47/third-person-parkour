@@ -7,11 +7,41 @@ import Cloud from './Cloud'; // Import the Cloud component
 import Portal from './Portal';
 import MovingPlatform from './MovingPlatform';
 import TogglingPlatform from './TogglingPlatform';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 
-// Define levels
-const levels = {
+// First, define the platform types
+interface BasePlatform {
+  position: [number, number, number];
+  size: [number, number, number];
+  color?: string;
+  isStart?: boolean;
+  isEnd?: boolean;
+}
+
+interface MovingPlatform extends BasePlatform {
+  type: 'moving';
+  movement: {
+    axis: 'x' | 'y' | 'z';
+    range: number;
+    speed: number;
+  };
+}
+
+interface TogglingPlatform extends BasePlatform {
+  type: 'toggling';
+  toggleInterval: number;
+}
+
+type Platform = BasePlatform | MovingPlatform | TogglingPlatform;
+
+// Define the levels type
+type Levels = {
+  [key: number]: Platform[];
+};
+
+// Now define the levels object with the proper type
+const levels: Levels = {
   1: [
     { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000" },
     { position: [0, 0, -10], size: [3, 1, 3] },
@@ -39,123 +69,112 @@ const levels = {
   ],
   3: [
     // Starting platform (red)
-    { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000" },
-    
-    // Static platform to start
-    { position: [0, 0, -8], size: [3, 1, 3] },
-    
-    // First moving platform - side to side
-    { 
-      type: 'moving',
-      position: [0, 1, -16], 
-      size: [3, 1, 3],
-      movement: { axis: 'x', range: 5, speed: 1.5 }
-    },
-    
-    // Static rest platform
-    { position: [-3, 2, -24], size: [3, 1, 3] },
-    
-    // Moving platform - up and down
-    { 
-      type: 'moving',
-      position: [3, 3, -32], 
-      size: [3, 1, 3],
-      movement: { axis: 'y', range: 2, speed: 1.2 }
-    },
-    
-    // Two consecutive moving platforms - opposite directions
-    { 
-      type: 'moving',
-      position: [-2, 4, -40], 
-      size: [3, 1, 3],
-      movement: { axis: 'x', range: 4, speed: 1.8 }
-    },
-    { 
-      type: 'moving',
-      position: [2, 5, -48], 
-      size: [3, 1, 3],
-      movement: { axis: 'x', range: 4, speed: -1.8 } // Negative speed for opposite direction
-    },
-    
-    // Moving platform - vertical challenge
-    { 
-      type: 'moving',
-      position: [0, 6, -56], 
-      size: [4, 1, 4],
-      movement: { axis: 'y', range: 3, speed: 1.5 }
-    },
-    
-    // Moving platforms in sync - creating a path
-    { 
-      type: 'moving',
-      position: [-4, 7, -64], 
-      size: [3, 1, 3],
-      movement: { axis: 'x', range: 3, speed: 1.3 }
-    },
-    { 
-      type: 'moving',
-      position: [4, 8, -72], 
-      size: [3, 1, 3],
-      movement: { axis: 'x', range: 3, speed: 1.3 }
-    },
-    
-    // Final moving platform challenge - combines both movements
-    { 
-      type: 'moving',
-      position: [0, 9, -80], 
-      size: [4, 1, 4],
-      movement: { axis: 'x', range: 5, speed: 1.6 }
-    },
-    { 
-      type: 'moving',
-      position: [0, 10, -88], 
-      size: [4, 1, 4],
-      movement: { axis: 'y', range: 2, speed: 1.4 }
-    },
-    
-    // Final platform (green)
-    { position: [0, 11, -96], size: [5, 1, 5], color: "#00ff00" }
-  ],
-  4: [
-    // Starting platform (red)
     { 
       position: [0, -1, 0], 
       size: [10, 1, 10], 
       color: "#ff0000",
       isStart: true
     },
-    // Disappearing platforms (all green)
+    // First moving platform - horizontal
     { 
-      position: [0, 0, -10], 
+      type: 'moving',
+      position: [0, 0, -12], 
+      size: [3, 1, 3],
+      movement: { 
+        axis: 'x', 
+        range: 5, 
+        speed: 2 
+      }
+    },
+    // Vertical moving platform
+    { 
+      type: 'moving',
+      position: [-3, 1, -22], 
+      size: [3, 1, 3],
+      movement: { 
+        axis: 'y', 
+        range: 2.5, 
+        speed: 1.5 
+      }
+    },
+    // Fast horizontal moving platform
+    { 
+      type: 'moving',
+      position: [3, 2, -32], 
+      size: [3, 1, 3],
+      movement: { 
+        axis: 'x', 
+        range: 4, 
+        speed: 2.5 
+      }
+    },
+    // Rest platform (static)
+    { 
+      position: [-2, 3, -42], 
+      size: [3, 1, 3]
+    },
+    // Final moving platform - challenging vertical
+    { 
+      type: 'moving',
+      position: [2, 4, -52], 
+      size: [3, 1, 3],
+      movement: { 
+        axis: 'y', 
+        range: 3, 
+        speed: 2 
+      }
+    },
+    // End platform (green)
+    { 
+      position: [0, 5, -62], 
+      size: [4, 1, 4], 
+      color: "#00ff00",
+      isEnd: true
+    }
+  ],
+  4: [
+    // Starting platform (red, static)
+    { 
+      position: [0, -1, 0], 
+      size: [10, 1, 10], 
+      color: "#ff0000",
+      isStart: true
+    },
+    // First disappearing platform
+    { 
+      type: 'toggling',
+      position: [0, 0, -12], 
       size: [3, 1, 3], 
       color: "#00ff00",
-      toggleInterval: 2,
-      type: 'toggling'
+      toggleInterval: 2.0  // Longer interval
     },
+    // Second disappearing platform
     { 
-      position: [3, 1, -20], 
+      type: 'toggling',
+      position: [3, 1, -22], 
       size: [3, 1, 3], 
       color: "#00ff00",
-      toggleInterval: 1.5,
-      type: 'toggling'
+      toggleInterval: 2.5  // Offset timing
     },
+    // Third disappearing platform
     { 
-      position: [-3, 2, -30], 
+      type: 'toggling',
+      position: [-2, 2, -32], 
       size: [3, 1, 3], 
       color: "#00ff00",
-      toggleInterval: 2.5,
-      type: 'toggling'
+      toggleInterval: 2.0  // Even longer interval
     },
+    // Fourth disappearing platform
     { 
-      position: [0, 3, -40], 
+      type: 'toggling',
+      position: [2, 3, -42], 
       size: [3, 1, 3], 
       color: "#00ff00",
-      toggleInterval: 1.8,
-      type: 'toggling'
+      toggleInterval: 2.2  // Different timing
     },
-    // End platform (doesn't disappear)
+    // End platform (green, static)
     { 
-      position: [0, 4, -50], 
+      position: [0, 4, -52], 
       size: [5, 1, 5], 
       color: "#00ff00",
       isEnd: true
@@ -164,7 +183,7 @@ const levels = {
 };
 
 const GameScene = () => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const [currentLevel, setCurrentLevel] = useState<keyof typeof levels>(1);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const playerRef = useRef<THREE.Mesh>(null);
