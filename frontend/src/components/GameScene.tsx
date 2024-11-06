@@ -7,7 +7,7 @@ import Cloud from './Cloud'; // Import the Cloud component
 import Portal from './Portal';
 import MovingPlatform from './MovingPlatform';
 import TogglingPlatform from './TogglingPlatform';
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 
 // First, define the platform types
@@ -43,7 +43,7 @@ type Levels = {
 // Now define the levels object with the proper type
 const levels: Levels = {
   1: [
-    { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000" },
+    { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000", isStart: true },
     { position: [0, 0, -10], size: [3, 1, 3] },
     { position: [0, 1, -20], size: [5, 1, 5] },
     { position: [0, 2, -30], size: [3, 1, 3] },
@@ -53,7 +53,7 @@ const levels: Levels = {
     { position: [0, 6, -70], size: [4, 1, 4], color: "#00ff00" },
   ],
   2: [
-    { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000" },
+    { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000", isStart: true },
     { position: [3, 0, -12], size: [3, 1, 3] },
     { position: [-3, 1, -18], size: [3, 1, 3] },
     { position: [4, 2, -24], size: [3, 1, 3] },
@@ -182,12 +182,40 @@ const levels: Levels = {
   ]
 };
 
-const GameScene = () => {
-  const [currentLevel, setCurrentLevel] = useState<keyof typeof levels>(1);
+interface GameSceneProps {
+  initialLevel: number;
+  onBackToMenu: () => void;
+  isActive: boolean;
+}
+
+const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isActive }) => {
+  const [currentLevel, setCurrentLevel] = useState(initialLevel);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const playerRef = useRef<THREE.Mesh>(null);
   const [platformStates, setPlatformStates] = useState<{ [key: string]: boolean }>({});
+
+  useEffect(() => {
+    setCurrentLevel(initialLevel);
+    if (playerRef.current) {
+      const startPos = getStartingPlatformPosition(initialLevel);
+      playerRef.current.position.set(...startPos);
+      setIsGameOver(false);
+      setIsRestarting(prev => !prev);
+    }
+  }, [initialLevel]);
+
+  const getStartingPlatformPosition = (level: number): [number, number, number] => {
+    const startPlatform = levels[level]?.find(p => p.isStart);
+    if (startPlatform) {
+      return [
+        startPlatform.position[0],
+        startPlatform.position[1] + startPlatform.size[1]/2 + 1,
+        startPlatform.position[2]
+      ];
+    }
+    return [0, 5, 0];
+  };
 
   const handleFall = useCallback(() => {
     if (!isGameOver) {
@@ -240,7 +268,8 @@ const GameScene = () => {
   }, []);
 
   return (
-    <div style={{ position: 'relative', height: '100vh' }}>
+    <div style={{ position: 'relative', height: '100vh', pointerEvents: isActive ? 'auto' : 'none' }}>
+      <style>{globalStyles}</style>
       <Canvas style={{ 
         backgroundColor: '#87CEEB', 
         height: '100vh',
@@ -327,20 +356,35 @@ const GameScene = () => {
       {isGameOver && (
         <div style={styles.loseOverlayContainer}>
           <div style={styles.loseBox}>
-            <h1 style={styles.loseText}>You Lose</h1>
+            <div style={styles.loseTitleContainer}>
+              <div style={styles.loseTextYou}>YOU</div>
+              <div style={styles.loseTextLose}>LOSE</div>
+            </div>
             <div style={styles.buttonContainer}>
               <button 
                 style={styles.restartButton}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2980b9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3498db'}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = '#2980b9';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = '#3498db';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
                 onClick={restartCurrentLevel}
               >
                 Restart Level {currentLevel}
               </button>
               <button 
                 style={styles.restartButtonRed}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#c0392b'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#e74c3c'}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = '#c0392b';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = '#e74c3c';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
                 onClick={restartFromBeginning}
               >
                 Start from Level 1
@@ -365,59 +409,100 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'auto',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backdropFilter: 'blur(5px)',
+    zIndex: 1000,
   },
   loseBox: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     padding: '40px 60px',
     borderRadius: '15px',
-    boxShadow: '0 0 20px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 0 30px rgba(255, 0, 0, 0.3)',
     display: 'flex',
     flexDirection: 'column' as 'column',
     alignItems: 'center',
     gap: '20px',
-    border: '2px solid rgba(255, 255, 255, 0.1)',
+    border: '2px solid rgba(255, 0, 0, 0.3)',
     backdropFilter: 'blur(10px)',
+    minWidth: '300px',
   },
-  loseText: {
-    fontSize: '2.5rem',
+  loseTitleContainer: {
+    marginBottom: '30px',
+    textAlign: 'center' as 'center',
+  },
+  loseTextYou: {
+    fontSize: '4rem',
+    fontFamily: '"Press Start 2P", cursive',
     color: '#fff',
-    margin: 0,
-    textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+    textShadow: `
+      0 0 10px #ff0000,
+      0 0 20px #ff0000,
+      0 0 30px #ff0000,
+      0 0 40px #ff0000
+    `,
+    WebkitTextStroke: '2px #ff0000',
+    animation: 'pulse 2s infinite',
     marginBottom: '10px',
+    letterSpacing: '2px',
+    lineHeight: '1.2',
+  },
+  loseTextLose: {
+    fontSize: '4rem',
+    fontFamily: '"Press Start 2P", cursive',
+    color: '#fff',
+    textShadow: `
+      0 0 10px #ff0000,
+      0 0 20px #ff0000,
+      0 0 30px #ff0000,
+      0 0 40px #ff0000
+    `,
+    WebkitTextStroke: '2px #ff0000',
+    animation: 'pulse 2s infinite',
+    letterSpacing: '2px',
+    lineHeight: '1.2',
   },
   restartButton: {
-    padding: '12px 30px',
+    padding: '15px 40px',
     fontSize: '1.2rem',
     backgroundColor: '#3498db',
-    border: 'none',
+    border: '3px solid #2980b9',
     borderRadius: '8px',
     cursor: 'pointer',
     color: '#fff',
-    transition: 'background-color 0.2s ease',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    transition: 'all 0.2s ease',
     width: '100%',
     textAlign: 'center' as 'center',
     fontWeight: '500',
+    boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: '2px',
+    fontFamily: '"Press Start 2P", cursive',
+    fontSize: '1rem',
   },
   restartButtonRed: {
-    padding: '12px 30px',
+    padding: '15px 40px',
     fontSize: '1.2rem',
     backgroundColor: '#e74c3c',
-    border: 'none',
+    border: '3px solid #c0392b',
     borderRadius: '8px',
     cursor: 'pointer',
     color: '#fff',
-    transition: 'background-color 0.2s ease',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+    transition: 'all 0.2s ease',
     width: '100%',
     textAlign: 'center' as 'center',
     fontWeight: '500',
+    boxShadow: '0 0 10px rgba(231, 76, 60, 0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: '2px',
+    fontFamily: '"Press Start 2P", cursive',
+    fontSize: '1rem',
   },
   buttonContainer: {
     display: 'flex',
     flexDirection: 'column' as 'column',
     gap: '15px',
     width: '100%',
+    minWidth: '300px',
   },
   levelIndicator: {
     position: 'absolute' as 'absolute',
@@ -431,5 +516,22 @@ const styles = {
     zIndex: 1000,
   },
 };
+
+// Make sure you have the global styles for the font and animations
+const globalStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes glow {
+    0% { filter: brightness(100%); }
+    50% { filter: brightness(150%); }
+    100% { filter: brightness(100%); }
+  }
+`;
 
 export default GameScene;
