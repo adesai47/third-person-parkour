@@ -26,9 +26,10 @@ interface PlayerProps {
   isRestarting?: boolean;
   currentLevel: number;
   platformStates: { [key: string]: boolean };
+  style: PlayerStyle;
 }
 
-const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevelComplete, isRestarting, currentLevel, platformStates }, ref) => {
+const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) => {
   const velocity = useRef(new THREE.Vector3());
   const isJumping = useRef(false);
   const jumpCount = useRef(0);
@@ -36,10 +37,11 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
   const hasFallen = useRef(false);
   const currentPlatform = useRef<Platform | null>(null);
   const lastTime = useRef(0);
+  const lightRef = useRef<THREE.PointLight>(null);
 
   // Updated getStartingPlatformPosition function
   const getStartingPlatformPosition = () => {
-    const startingPlatform = platforms.find(platform => platform.isStart || platform.position[1] === -1);
+    const startingPlatform = props.platforms.find(platform => platform.isStart || platform.position[1] === -1);
     if (startingPlatform) {
       // Return position above the platform (y + 2 to ensure we're well above it)
       return [
@@ -59,7 +61,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
       velocity.current.set(0, 0, 0); // Reset velocity
       hasFallen.current = false; // Reset fall state
     }
-  }, [currentLevel]);
+  }, [props.currentLevel]);
 
   // Handle platform movement if applicable
   const getPlatformCurrentPosition = (platform: Platform, time: number) => {
@@ -77,8 +79,8 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
   const checkPlatformCollision = (playerPosition: THREE.Vector3, time: number) => {
     currentPlatform.current = null;
 
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
+    for (let i = 0; i < props.platforms.length; i++) {
+      const platform = props.platforms[i];
       const platformId = `platform-${i}`;
 
       // Always check collision with starting platform
@@ -115,7 +117,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
       }
 
       // Rest of platform collision checks for non-starting platforms
-      if (currentLevel === 4 && !platform.isStart && !platform.isEnd && !platformStates[platformId]) {
+      if (props.currentLevel === 4 && !platform.isStart && !platform.isEnd && !props.platformStates[platformId]) {
         continue;
       }
 
@@ -238,12 +240,12 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
     // Fall detection
     if (newPosition.y < -10 && !hasFallen.current) {
       hasFallen.current = true;
-      onFall();
+      props.onFall();
       return;
     }
 
     // Check for level completion
-    const lastPlatform = platforms[platforms.length - 1];
+    const lastPlatform = props.platforms[props.platforms.length - 1];
     const portalPosition = [
       lastPlatform.position[0],
       lastPlatform.position[1] + 1,
@@ -251,14 +253,14 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
     ];
     
     const distanceToPortal = newPosition.distanceTo(new THREE.Vector3(...portalPosition));
-    if (distanceToPortal < 2 && currentLevel < 4) {
-      onLevelComplete?.();
+    if (distanceToPortal < 2 && props.currentLevel < 4) {
+      props.onLevelComplete?.();
     }
   });
 
   // Reset player position on restart
   useEffect(() => {
-    if (isRestarting) {
+    if (props.isRestarting) {
       if (ref && 'current' in ref && ref.current) {
         ref.current.position.set(...getStartingPlatformPosition());
         velocity.current.set(0, 0, 0);
@@ -268,13 +270,71 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ platforms, onFall, onLevel
         pressedKeys.current = {};
       }
     }
-  }, [isRestarting, currentLevel, ref]);
+  }, [props.isRestarting, props.currentLevel, ref]);
+
+  const getMesh = () => {
+    switch (style.design) {
+      case 'sphere':
+        return <sphereGeometry args={[0.5, 32, 32]} />;
+      case 'diamond':
+        return <octahedronGeometry args={[0.5]} />;
+      default:
+        return <boxGeometry args={[1, 1, 1]} />;
+    }
+  };
+
+  const getMaterial = () => {
+    if (style.material === 'neon') {
+      return (
+        <meshStandardMaterial
+          color={style.color}
+          emissive={style.color}
+          emissiveIntensity={2}
+          toneMapped={false}
+        />
+      );
+    }
+    return (
+      <meshStandardMaterial
+        color={style.color}
+        roughness={0.7}
+      />
+    );
+  };
+
+  // Update light color when style changes
+  useEffect(() => {
+    if (lightRef.current && style.material === 'neon') {
+      lightRef.current.color.set(style.color);
+    }
+  }, [style.color, style.material]);
+
+  // Animate the neon glow
+  useFrame((state, delta) => {
+    if (lightRef.current && style.material === 'neon') {
+      const intensity = 3 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
+      lightRef.current.intensity = intensity;
+    }
+  });
 
   return (
-    <mesh ref={ref} position={getStartingPlatformPosition()}>
-      <sphereGeometry args={[0.5, 32, 32]} />
-      <meshStandardMaterial color="hotpink" />
-    </mesh>
+    <group>
+      <mesh ref={ref} {...props}>
+        {getMesh()}
+        {getMaterial()}
+      </mesh>
+      
+      {/* Add point light for neon effect */}
+      {style.material === 'neon' && (
+        <pointLight
+          ref={lightRef}
+          color={style.color}
+          intensity={3}
+          distance={5}
+          decay={2}
+        />
+      )}
+    </group>
   );
 });
 
