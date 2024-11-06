@@ -9,6 +9,8 @@ import MovingPlatform from './MovingPlatform';
 import TogglingPlatform from './TogglingPlatform';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
+import PauseMenu, { PlayerStyle, GameSettings } from './PauseMenu';
+import Background from './Background';
 
 // First, define the platform types
 interface BasePlatform {
@@ -194,6 +196,15 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
   const [isRestarting, setIsRestarting] = useState(false);
   const playerRef = useRef<THREE.Mesh>(null);
   const [platformStates, setPlatformStates] = useState<{ [key: string]: boolean }>({});
+  const [isPaused, setIsPaused] = useState(false);
+  const [gameSettings, setGameSettings] = useState<GameSettings>({
+    playerStyle: {
+      color: '#00ff00',
+      design: 'cube',
+      material: 'normal'
+    },
+    backgroundMode: 'day'
+  });
 
   useEffect(() => {
     setCurrentLevel(initialLevel);
@@ -204,6 +215,17 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
       setIsRestarting(prev => !prev);
     }
   }, [initialLevel]);
+
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPaused(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
   const getStartingPlatformPosition = (level: number): [number, number, number] => {
     const startPlatform = levels[level]?.find(p => p.isStart);
@@ -276,6 +298,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
         filter: isGameOver ? 'brightness(0.4)' : 'none',
         transition: 'filter 0.3s ease'
       }}>
+        <Background mode={gameSettings.backgroundMode} />
         <CameraController playerRef={playerRef} />
         <ambientLight intensity={0.3} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
@@ -325,6 +348,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
           isRestarting={isRestarting}
           currentLevel={currentLevel}
           platformStates={platformStates}
+          style={gameSettings.playerStyle}
         />
 
         {/* Only show portal for levels 1-3 */}
@@ -346,6 +370,15 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
         <Cloud position={[-10, -7, -35]} />
         <Cloud position={[15, -6, -55]} />
       </Canvas>
+
+      {isPaused && (
+        <PauseMenu
+          onResume={() => setIsPaused(false)}
+          onMainMenu={onBackToMenu}
+          onUpdateSettings={setGameSettings}
+          currentSettings={gameSettings}
+        />
+      )}
 
       {/* Level indicator */}
       <div style={styles.levelIndicator}>
