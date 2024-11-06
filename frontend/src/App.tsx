@@ -16,7 +16,17 @@ function App() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
+    <div style={{ 
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
+      touchAction: 'none',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+    }}>
       <GameScene 
         initialLevel={currentLevel}
         onBackToMenu={() => setGameStarted(false)}

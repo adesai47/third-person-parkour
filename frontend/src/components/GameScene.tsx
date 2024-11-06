@@ -290,14 +290,29 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
   }, []);
 
   return (
-    <div style={{ position: 'relative', height: '100vh', pointerEvents: isActive ? 'auto' : 'none' }}>
-      <style>{globalStyles}</style>
-      <Canvas style={{ 
-        backgroundColor: '#87CEEB', 
-        height: '100vh',
-        filter: isGameOver ? 'brightness(0.4)' : 'none',
-        transition: 'filter 0.3s ease'
-      }}>
+    <div style={{ 
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
+      touchAction: 'none',
+      userSelect: 'none',
+    }}>
+      <Canvas
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        }}
+        camera={{
+          position: [0, 5, 10],
+          fov: 75,
+        }}
+      >
         <Background mode={gameSettings.backgroundMode} />
         <CameraController playerRef={playerRef} />
         <ambientLight intensity={0.3} />
