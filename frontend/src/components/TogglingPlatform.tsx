@@ -1,6 +1,5 @@
 // src/components/TogglingPlatform.tsx
 import React, { useState, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
 
 interface TogglingPlatformProps {
   position: [number, number, number];

@@ -7,11 +7,11 @@ interface PauseMenuProps {
   currentSettings: GameSettings;
 }
 
-export interface PlayerStyle {
+export type PlayerStyle = {
+  design: 'sphere' | 'diamond' | 'cube';
+  material: 'standard' | 'neon';
   color: string;
-  design: 'cube' | 'sphere' | 'diamond';
-  material: 'normal' | 'neon';
-}
+};
 
 export interface GameSettings {
   playerStyle: PlayerStyle;
@@ -41,7 +41,7 @@ const PauseMenu: React.FC<PauseMenuProps> = ({
       backdropFilter: 'blur(5px)',
       zIndex: 1000,
       touchAction: 'none',
-      userSelect: 'none',
+      userSelect: 'none' as const,
     },
     menuBox: {
       backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -49,14 +49,14 @@ const PauseMenu: React.FC<PauseMenuProps> = ({
       borderRadius: '15px',
       boxShadow: '0 0 30px rgba(0, 0, 0, 0.5)',
       display: 'flex',
-      flexDirection: 'column' as 'column',
+      flexDirection: 'column' as const,
       alignItems: 'center',
       gap: '15px',
       border: '2px solid rgba(255, 255, 255, 0.1)',
       minWidth: '400px',
       maxHeight: '90vh',
-      overflowY: 'auto',
-      overscrollBehavior: 'contain',
+      overflowY: 'auto' as const,
+      overscrollBehavior: 'contain' as const,
     },
     title: {
       fontFamily: '"Press Start 2P", cursive',
