@@ -85,7 +85,6 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
         const minZ = platformPos[2] - size[2] / 2;
         const maxZ = platformPos[2] + size[2] / 2;
         const platformTop = platformPos[1] + size[1] / 2;
-        const platformBottom = platformPos[1] - size[1] / 2;
 
         // Improved collision detection
         if (
