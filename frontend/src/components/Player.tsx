@@ -301,7 +301,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
   }, [style.color, style.material]);
 
   // Animate the neon glow
-  useFrame((state, delta) => {
+  useFrame((state) => {
     if (lightRef.current && style.material === 'neon') {
       const intensity = 3 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
       lightRef.current.intensity = intensity;
