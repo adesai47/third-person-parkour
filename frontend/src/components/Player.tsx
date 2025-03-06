@@ -2,22 +2,7 @@
 import { forwardRef, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-
-interface Platform {
-  position: [number, number, number];
-  size: [number, number, number];
-  color: string;
-  isSafe?: boolean;
-  type?: 'moving';
-  movement?: {
-    axis: 'x' | 'y' | 'z';
-    range: number;
-    speed: number;
-  };
-  isStart?: boolean;
-  isEnd?: boolean;
-  toggleInterval?: number;
-}
+import type { Platform } from '../types/Platform';
 
 interface PlayerProps {
   platforms: Platform[];
@@ -28,6 +13,13 @@ interface PlayerProps {
   platformStates: { [key: string]: boolean };
   style: PlayerStyle;
 }
+
+// Add PlayerStyle type
+export type PlayerStyle = {
+  design: 'sphere' | 'diamond' | 'cube';
+  material: 'standard' | 'neon';
+  color: string;
+};
 
 const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) => {
   const velocity = useRef(new THREE.Vector3());
@@ -56,10 +48,10 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
   // Ensure proper initial position
   useEffect(() => {
     if (ref && 'current' in ref && ref.current) {
-      const startPos = getStartingPlatformPosition();
-      ref.current.position.set(...startPos);
-      velocity.current.set(0, 0, 0); // Reset velocity
-      hasFallen.current = false; // Reset fall state
+      ref.current.position.set(...(getStartingPlatformPosition() as [number, number, number]));
+      velocity.current.set(0, 0, 0);
+      isJumping.current = false;
+      hasFallen.current = false;
     }
   }, [props.currentLevel]);
 
@@ -93,7 +85,6 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
         const minZ = platformPos[2] - size[2] / 2;
         const maxZ = platformPos[2] + size[2] / 2;
         const platformTop = platformPos[1] + size[1] / 2;
-        const platformBottom = platformPos[1] - size[1] / 2;
 
         // Improved collision detection
         if (
@@ -262,7 +253,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
   useEffect(() => {
     if (props.isRestarting) {
       if (ref && 'current' in ref && ref.current) {
-        ref.current.position.set(...getStartingPlatformPosition());
+        ref.current.position.set(...(getStartingPlatformPosition() as [number, number, number]));
         velocity.current.set(0, 0, 0);
         isJumping.current = false;
         jumpCount.current = 0;
@@ -310,7 +301,7 @@ const Player = forwardRef<THREE.Mesh, PlayerProps>(({ style, ...props }, ref) =>
   }, [style.color, style.material]);
 
   // Animate the neon glow
-  useFrame((state, delta) => {
+  useFrame((state) => {
     if (lightRef.current && style.material === 'neon') {
       const intensity = 3 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
       lightRef.current.intensity = intensity;

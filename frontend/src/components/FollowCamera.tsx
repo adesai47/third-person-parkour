@@ -1,6 +1,5 @@
 // src/components/FollowCamera.tsx
 import { useFrame, useThree } from '@react-three/fiber';
-import { useRef } from 'react';
 import * as THREE from 'three';
 
 const FollowCamera = () => {

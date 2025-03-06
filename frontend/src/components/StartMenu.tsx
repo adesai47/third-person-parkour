@@ -23,7 +23,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, onSelectLevel }) => 
       backdropFilter: 'blur(5px)',
       zIndex: 1000,
       touchAction: 'none',
-      userSelect: 'none',
+      userSelect: 'none' as 'none',
     },
     menuBox: {
       backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -39,7 +39,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, onSelectLevel }) => 
       minWidth: '300px',
       animation: 'fadeIn 0.3s ease-out',
       maxHeight: '90vh',
-      overflowY: 'auto',
+      overflowY: 'auto' as 'auto',
       overscrollBehavior: 'contain',
     },
     titleContainer: {
@@ -86,7 +86,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, onSelectLevel }) => 
       textAlign: 'center' as 'center',
       fontWeight: '500',
       boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
-      textTransform: 'uppercase',
+      textTransform: 'uppercase' as 'uppercase',
       letterSpacing: '2px',
       position: 'relative' as 'relative',
       overflow: 'hidden',
@@ -107,7 +107,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, onSelectLevel }) => 
       color: '#fff',
       transition: 'all 0.2s ease',
       boxShadow: '0 0 10px rgba(46, 204, 113, 0.5)',
-      textTransform: 'uppercase',
+      textTransform: 'uppercase' as 'uppercase',
       letterSpacing: '1px',
     },
     backButton: {
@@ -121,7 +121,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, onSelectLevel }) => 
       transition: 'all 0.2s ease',
       marginTop: '20px',
       boxShadow: '0 0 10px rgba(231, 76, 60, 0.5)',
-      textTransform: 'uppercase',
+      textTransform: 'uppercase' as 'uppercase',
       letterSpacing: '1px',
     },
   };

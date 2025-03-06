@@ -2,6 +2,7 @@
 import { Canvas } from '@react-three/fiber';
 import Player from './Player';
 import Platform from './Platform';
+import type { Platform as PlatformType } from '../types/Platform';
 import CameraController from './CameraController';
 import Cloud from './Cloud'; // Import the Cloud component
 import Portal from './Portal';
@@ -9,44 +10,18 @@ import MovingPlatform from './MovingPlatform';
 import TogglingPlatform from './TogglingPlatform';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
-import PauseMenu, { PlayerStyle, GameSettings } from './PauseMenu';
+import PauseMenu, { GameSettings } from './PauseMenu';
 import Background from './Background';
-
-// First, define the platform types
-interface BasePlatform {
-  position: [number, number, number];
-  size: [number, number, number];
-  color?: string;
-  isStart?: boolean;
-  isEnd?: boolean;
-}
-
-interface MovingPlatform extends BasePlatform {
-  type: 'moving';
-  movement: {
-    axis: 'x' | 'y' | 'z';
-    range: number;
-    speed: number;
-  };
-}
-
-interface TogglingPlatform extends BasePlatform {
-  type: 'toggling';
-  toggleInterval: number;
-}
-
-type Platform = BasePlatform | MovingPlatform | TogglingPlatform;
-
 // Define the levels type
 type Levels = {
-  [key: number]: Platform[];
+  [key: number]: PlatformType[];
 };
 
 // Now define the levels object with the proper type
 const levels: Levels = {
   1: [
     { position: [0, -1, 0], size: [10, 1, 10], color: "#ff0000", isStart: true },
-    { position: [0, 0, -10], size: [3, 1, 3] },
+    { position: [0, 0, -10], size: [3, 1, 3], color: "#ffffff" },
     { position: [0, 1, -20], size: [5, 1, 5] },
     { position: [0, 2, -30], size: [3, 1, 3] },
     { position: [0, 3, -40], size: [4, 1, 4] },
@@ -190,7 +165,7 @@ interface GameSceneProps {
   isActive: boolean;
 }
 
-const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isActive }) => {
+const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu }) => {
   const [currentLevel, setCurrentLevel] = useState(initialLevel);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
@@ -201,7 +176,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
     playerStyle: {
       color: '#00ff00',
       design: 'cube',
-      material: 'normal'
+      material: 'standard'
     },
     backgroundMode: 'day'
   });
@@ -320,7 +295,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
 
         {/* Render platforms for current level */}
         {levels[currentLevel].map((platform, index) => {
-          if (platform.type === 'moving') {
+          if (platform.type === 'moving' && platform.movement) {
             return (
               <MovingPlatform
                 key={index}
@@ -330,7 +305,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
                 movement={platform.movement}
               />
             );
-          } else if (platform.type === 'toggling' || platform.toggleInterval) {
+          } else if (platform.type === 'toggling' && 'toggleInterval' in platform) {
             return (
               <TogglingPlatform
                 key={index}
@@ -448,7 +423,7 @@ const GameScene: React.FC<GameSceneProps> = ({ initialLevel, onBackToMenu, isAct
 // Updated styles
 const styles = {
   loseOverlayContainer: {
-    position: 'absolute' as 'absolute',
+    position: 'absolute' as const,
     top: 0,
     left: 0,
     width: '100%',
@@ -456,7 +431,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    pointerEvents: 'auto',
+    pointerEvents: 'auto' as const,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     backdropFilter: 'blur(5px)',
     zIndex: 1000,
@@ -519,13 +494,12 @@ const styles = {
     color: '#fff',
     transition: 'all 0.2s ease',
     width: '100%',
-    textAlign: 'center' as 'center',
+    textAlign: 'center' as const,
     fontWeight: '500',
     boxShadow: '0 0 10px rgba(52, 152, 219, 0.5)',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
     letterSpacing: '2px',
     fontFamily: '"Press Start 2P", cursive',
-    fontSize: '1rem',
   },
   restartButtonRed: {
     padding: '15px 40px',
@@ -537,13 +511,12 @@ const styles = {
     color: '#fff',
     transition: 'all 0.2s ease',
     width: '100%',
-    textAlign: 'center' as 'center',
+    textAlign: 'center' as const,
     fontWeight: '500',
     boxShadow: '0 0 10px rgba(231, 76, 60, 0.5)',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
     letterSpacing: '2px',
     fontFamily: '"Press Start 2P", cursive',
-    fontSize: '1rem',
   },
   buttonContainer: {
     display: 'flex',
@@ -564,22 +537,5 @@ const styles = {
     zIndex: 1000,
   },
 };
-
-// Make sure you have the global styles for the font and animations
-const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-  }
-
-  @keyframes glow {
-    0% { filter: brightness(100%); }
-    50% { filter: brightness(150%); }
-    100% { filter: brightness(100%); }
-  }
-`;
 
 export default GameScene;
